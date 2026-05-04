@@ -9,7 +9,7 @@ LeadBotX lets teams connect their databases (PostgreSQL, MySQL) or upload data f
 ## What It Does
 
 ### Connect Any Data Source
-Import a CSV/Excel file or plug in an existing PostgreSQL or MySQL database. LeadBotX introspects the schema, infers column types, and stores the metadata — ready for AI-powered querying in seconds.
+Import a CSV/Excel file or plug in an existing PostgreSQL or MySQL database. LeadBotX introspects the schema, infers column types, and stores the metadata — ready for AI-powered querying in seconds. Uploaded CSV/Excel data is stored in a platform-managed PostgreSQL database (Neon) with schema-per-connection isolation, so all data sources benefit from the same SQL execution engine.
 
 ### Ask Questions in Plain English
 Type a question like *"Show me the top 10 customers by revenue"* or *"Find all orders placed in the last 30 days over $500"*. LeadBotX sends only the schema metadata (table names, column names, types) to OpenAI, which generates a safe query. The system validates it, executes it against the actual data source, and returns results — all without exposing raw data to the AI.
@@ -44,6 +44,7 @@ Get instant WebSocket-based notifications when someone is invited to your databa
 │  │ Guard        │  │ Avatar       │  │ Connect PostgreSQL/MySQL │ │
 │  └─────────────┘  └──────────────┘  │ Schema Introspection     │ │
 │                                      │ SQL Client Pool          │ │
+│                                      │ Tabular Storage (Neon)   │ │
 │  ┌──────────────────────────┐       └──────────────────────────┘ │
 │  │ Dashboard Module         │                                     │
 │  │ Connection list, summary │       ┌──────────────────────────┐ │
@@ -53,8 +54,8 @@ Get instant WebSocket-based notifications when someone is invited to your databa
 │  ┌──────────────────────────┐       │ Table + column rules     │ │
 │  │ NL Query Module          │       └──────────────────────────┘ │
 │  │ OpenAI integration       │                                     │
-│  │ SQL safety validation    │       ┌──────────────────────────┐ │
-│  │ MongoDB chunk executor   │       │ Notification Module      │ │
+│  │ Unified SQL execution    │       ┌──────────────────────────┐ │
+│  │ SQL safety validation    │       │ Notification Module      │ │
 │  │ Saved/recent queries     │       │ CRUD + WebSocket push    │ │
 │  │ Rate limiting (20/hr)    │       │ Real-time delivery       │ │
 │  └──────────────────────────┘       └──────────────────────────┘ │
@@ -62,17 +63,18 @@ Get instant WebSocket-based notifications when someone is invited to your databa
 └──────────────────────────┬───────────────────────────────────────┘
                            │
               ┌────────────┼────────────────┐
-              ▼            ▼                ▼
+              ▼            ▼                ▼ 
         ┌──────────┐ ┌──────────┐   ┌─────────────┐
         │ MongoDB  │ │ OpenAI   │   │ PostgreSQL  │
         │ Atlas    │ │ API      │   │ / MySQL     │
         │          │ │          │   │ (user's own │
         │ Users    │ │ Schema → │   │  database)  │
-        │ Conns    │ │ SQL/Plan │   │             │
-        │ Chunks   │ │          │   │ Query       │
-        │ Roles    │ │ No raw   │   │ execution   │
-        │ Notifs   │ │ data sent│   │             │
-        └──────────┘ └──────────┘   └─────────────┘
+        │ Conns    │ │ SQL gen  │   │             │
+        │ Roles    │ │          │   ├─────────────┤
+        │ Notifs   │ │ No raw   │   │ Platform PG │
+        │          │ │ data sent│   │ (CSV/Excel  │
+        └──────────┘ └──────────┘   │  row data)  │
+                                     └─────────────┘
 ```
 
 ---
@@ -101,8 +103,8 @@ Get instant WebSocket-based notifications when someone is invited to your databa
 | TypeScript 5.7 | Type safety |
 | Mongoose 9 | MongoDB ODM |
 | Firebase Admin 13 | Server-side auth token verification |
-| OpenAI SDK 6 | Natural language → SQL/plan conversion |
-| pg 8 | PostgreSQL driver |
+| OpenAI SDK 6 | Natural language → SQL generation |
+| pg 8 + pg-copy-streams | PostgreSQL driver + bulk COPY loading |
 | mysql2 3 | MySQL driver |
 | csv-parse 6 | CSV file parsing |
 | xlsx 0.18 | Excel file parsing |
@@ -115,7 +117,8 @@ Get instant WebSocket-based notifications when someone is invited to your databa
 ### Infrastructure
 | Service | Purpose |
 |---------|---------|
-| MongoDB Atlas | Primary database (users, connections, chunks, roles, notifications) |
+| MongoDB Atlas | Primary database (users, connections, roles, notifications, schema metadata) |
+| Platform PostgreSQL (Neon) | Managed storage for CSV/Excel row data (schema-per-connection isolation) |
 | Firebase | Authentication provider (email/password) |
 | Cloudinary | Avatar image hosting |
 | OpenAI API | AI model for natural language query translation |
@@ -139,32 +142,19 @@ Table: customers (~5000 rows)
 
 ### Step 2: AI Response (received from OpenAI)
 
-**For SQL databases**, OpenAI returns a SQL query:
+OpenAI always returns a SQL query — for **all** data sources:
 ```json
 { "status": "ok", "sql": "SELECT name, revenue FROM customers ORDER BY revenue DESC LIMIT 10" }
 ```
-This SQL is validated (SELECT-only, no forbidden patterns, table/column RBAC check, LIMIT cap at 500), then executed on the user's actual PostgreSQL or MySQL database.
-
-**For CSV/Excel data**, OpenAI returns a structured plan:
-```json
-{
-  "status": "ok",
-  "plan": {
-    "table": "orders",
-    "filters": [{ "column": "total", "op": "gt", "value": 500 }],
-    "sort": { "column": "total", "direction": "desc" },
-    "limit": 50
-  }
-}
-```
-This plan is validated, then converted into a MongoDB aggregation pipeline (`$match → $unwind → $match → $sort → $limit → $project`) and executed against the stored data chunks.
+This SQL is validated (SELECT-only, no forbidden patterns, table/column RBAC check, LIMIT cap at 500), then executed on the appropriate database:
+- **PostgreSQL / MySQL** — the user's own external database
+- **CSV / Excel** — the platform's managed PostgreSQL instance (Neon), where uploaded file data is stored in isolated schemas
 
 ### Security
 - OpenAI never receives actual database rows
 - All generated SQL is validated before execution
 - Table and column access is enforced per user role
 - Rate limited to 20 queries per user per hour
-- MongoDB scan capped at 500,000 unwound rows
 
 ---
 
@@ -183,7 +173,8 @@ This plan is validated, then converted into a MongoDB aggregation pipeline (`$ma
 | **CSV export** | Export NLQ results as CSV files |
 | **Query history** | Save up to 3 queries, track 3 recent per connection |
 | **Schema refresh** | Re-introspect SQL databases on demand |
-| **Connection management** | Rename, enable/disable, delete connections |
+| **Connection health** | Auto-detect failed SQL connections, mark as unavailable, allow credential editing |
+| **Connection management** | Rename, enable/disable, delete connections with full cascade cleanup |
 | **Profile management** | Name, email display, avatar upload via Cloudinary |
 | **Swagger API docs** | Full interactive API documentation |
 | **Responsive UI** | Mobile-friendly layout with Tailwind CSS |
@@ -218,6 +209,7 @@ LeadBotX/
 ### Prerequisites
 - Node.js 18+
 - MongoDB Atlas cluster
+- PostgreSQL database (Neon recommended) for CSV/Excel row storage
 - Firebase project (Authentication enabled)
 - OpenAI API key
 - Cloudinary account (for avatars)
