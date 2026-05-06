@@ -1,235 +1,85 @@
 # LeadBotX
 
-**AI-powered database management and natural language querying platform.**
+**Ask your data questions in plain English — with team governance, not guesswork.**
 
-LeadBotX lets teams connect their databases (PostgreSQL, MySQL) or upload data files (CSV, Excel), then explore, search, and query that data using plain English — powered by OpenAI. It includes a full role-based access control system, real-time team notifications, and a modern dashboard UI.
-
----
-
-## What It Does
-
-### Connect Any Data Source
-Import a CSV/Excel file or plug in an existing PostgreSQL or MySQL database. LeadBotX introspects the schema, infers column types, and stores the metadata — ready for AI-powered querying in seconds. Uploaded CSV/Excel data is stored in a platform-managed PostgreSQL database (Neon) with schema-per-connection isolation, so all data sources benefit from the same SQL execution engine.
-
-### Ask Questions in Plain English
-Type a question like *"Show me the top 10 customers by revenue"* or *"Find all orders placed in the last 30 days over $500"*. LeadBotX sends only the schema metadata (table names, column names, types) to OpenAI, which generates a safe query. The system validates it, executes it against the actual data source, and returns results — all without exposing raw data to the AI.
-
-### Team Collaboration with RBAC
-Invite team members by email, assign custom roles with table-level and column-level access restrictions. Members only see the data their role permits — enforced server-side on every query.
-
-### Real-Time Notifications
-Get instant WebSocket-based notifications when someone is invited to your database or accepts an invitation. All notifications appear in a live dropdown on the dashboard.
+[Visit leadbotx.me](https://leadbotx.me/)
 
 ---
 
-## Architecture Overview
+## Overview
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        Frontend (React SPA)                      │
-│  React 18 · TypeScript · Tailwind CSS 4 · Vite · Zustand        │
-│  Firebase Auth (client) · Axios · Socket.IO Client               │
-└──────────────────────────┬───────────────────────────────────────┘
-                           │  REST API + WebSocket
-                           ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                      Backend (NestJS API)                         │
-│  NestJS 11 · TypeScript · Mongoose 9 · Firebase Admin             │
-│  OpenAI SDK · Multer · Cloudinary · Socket.IO                     │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                   │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────────────┐ │
-│  │ Auth Module  │  │ User Module  │  │ Connection Module        │ │
-│  │ Firebase     │  │ Profile CRUD │  │ Import CSV/Excel         │ │
-│  │ Guard        │  │ Avatar       │  │ Connect PostgreSQL/MySQL │ │
-│  └─────────────┘  └──────────────┘  │ Schema Introspection     │ │
-│                                      │ SQL Client Pool          │ │
-│                                      │ Tabular Storage (Neon)   │ │
-│  ┌──────────────────────────┐       └──────────────────────────┘ │
-│  │ Dashboard Module         │                                     │
-│  │ Connection list, summary │       ┌──────────────────────────┐ │
-│  │ Table preview, pagination│       │ Role Management Module   │ │
-│  └──────────────────────────┘       │ Role definitions (RBAC)  │ │
-│                                      │ Member invite/remove     │ │
-│  ┌──────────────────────────┐       │ Table + column rules     │ │
-│  │ NL Query Module          │       └──────────────────────────┘ │
-│  │ OpenAI integration       │                                     │
-│  │ Unified SQL execution    │       ┌──────────────────────────┐ │
-│  │ SQL safety validation    │       │ Notification Module      │ │
-│  │ Saved/recent queries     │       │ CRUD + WebSocket push    │ │
-│  │ Rate limiting (20/hr)    │       │ Real-time delivery       │ │
-│  └──────────────────────────┘       └──────────────────────────┘ │
-│                                                                   │
-└──────────────────────────┬───────────────────────────────────────┘
-                           │
-              ┌────────────┼────────────────┐
-              ▼            ▼                ▼ 
-        ┌──────────┐ ┌──────────┐   ┌─────────────┐
-        │ MongoDB  │ │ OpenAI   │   │ PostgreSQL  │
-        │ Atlas    │ │ API      │   │ / MySQL     │
-        │          │ │          │   │ (user's own │
-        │ Users    │ │ Schema → │   │  database)  │
-        │ Conns    │ │ SQL gen  │   │             │
-        │ Roles    │ │          │   ├─────────────┤
-        │ Notifs   │ │ No raw   │   │ Platform PG │
-        │          │ │ data sent│   │ (CSV/Excel  │
-        └──────────┘ └──────────┘   │  row data)  │
-                                     └─────────────┘
-```
+LeadBotX is a **web-based workspace** for teams that live in **SQL databases** and **tabular files** (CSV, spreadsheets). Instead of routing every question through a specialist or opening the floodgates with shared database passwords, teams **connect their sources once**, define **who may see which tables and columns**, and let approved users **explore and query** through a modern interface — including **natural language** so analysts and operators can move fast without writing SQL for every ad-hoc question.
+
+The product is built for **clarity and control**: the same experience whether your data lives in PostgreSQL, MySQL, or an uploaded file; **access rules enforced on the server** on every request; and collaboration flows (invites, roles, in-product notices) so shared access stays **intentional**, not accidental.
 
 ---
 
-## Full Tech Stack
+## What You Can Do (In Detail)
 
-### Frontend
-| Technology | Purpose |
-|-----------|---------|
-| React 18 | UI framework |
-| TypeScript 5.7 | Type safety |
-| Vite 6.3 | Build tool and dev server |
-| Tailwind CSS 4.1 | Utility-first styling |
-| React Router 7.13 | Client-side routing |
-| Zustand 5 | Lightweight state management |
-| Axios 1.16 | HTTP client with auth interceptor |
-| Firebase 12 (client) | Email/password authentication |
-| Socket.IO Client 4 | Real-time notifications |
-| Lucide React | Icon library |
-| Web Speech API | Browser-native voice-to-text |
+### Connect and organize your sources
 
-### Backend
-| Technology | Purpose |
-|-----------|---------|
-| NestJS 11 | Modular server framework |
-| TypeScript 5.7 | Type safety |
-| Mongoose 9 | MongoDB ODM |
-| Firebase Admin 13 | Server-side auth token verification |
-| OpenAI SDK 6 | Natural language → SQL generation |
-| pg 8 + pg-copy-streams | PostgreSQL driver + bulk COPY loading |
-| mysql2 3 | MySQL driver |
-| csv-parse 6 | CSV file parsing |
-| xlsx 0.18 | Excel file parsing |
-| Multer 2 | Multipart file upload handling |
-| Cloudinary 2 | Cloud image storage (avatars) |
-| Socket.IO 4 | WebSocket server for real-time push |
-| Swagger 11 | Interactive API documentation |
-| class-validator | Request DTO validation |
+- Attach **PostgreSQL** or **MySQL** databases you already run, or **upload** CSV and Excel-style files when there is no database handy.
+- See **connections** in one place: names, status, and what each source represents to the team.
+- **Refresh** structure when schemas change so exploration and questioning stay aligned with reality.
+- When a database connection is unhealthy, the product surfaces that clearly so owners can **update credentials** or pause use without silent failures.
 
-### Infrastructure
-| Service | Purpose |
-|---------|---------|
-| MongoDB Atlas | Primary database (users, connections, roles, notifications, schema metadata) |
-| Platform PostgreSQL (Neon) | Managed storage for CSV/Excel row data (schema-per-connection isolation) |
-| Firebase | Authentication provider (email/password) |
-| Cloudinary | Avatar image hosting |
-| OpenAI API | AI model for natural language query translation |
+### Explore before you commit to a question
+
+- A **dashboard** per connection shows how the data is shaped: high-level stats, table lists, and **preview rows** so users understand columns and grain before running heavier questions.
+- **Paginated browsing** opens a full table view when you need to scroll through more than a quick sample — useful for validation and spot-checks, not only for NLQ.
+
+### Query in natural language — with guardrails
+
+- Type **questions in everyday English** (for example, rankings, filters, time windows, joins implied by the schema) and receive **tabular results** suitable for reading in the app or **exporting** when you need a file downstream.
+- The path from question to answer is designed around **read-only, validated** access patterns and **role-aware** visibility so users do not receive columns or tables outside their assignment.
+- **Saved and recent questions** help individuals reuse successful phrasing without retyping; limits keep the experience focused and predictable.
+
+### Govern access like a product, not a DBA ticket queue
+
+- **Custom roles** go beyond “read/write/admin”: you can scope access at **table** and **column** level so contractors, regional teams, or internal roles see only what policy allows.
+- **Invite by email**, accept or decline, and **manage members** per connection — ownership and membership stay visible.
+- Enforcement is **server-side**, so the web UI is not the security boundary of last resort.
+
+### Collaborate without losing context
+
+- **In-app notifications** for invitations and membership changes help teams stay aligned without digging through email alone.
+- **Pending invites** are first-class: people see what they have been offered before they touch data.
+
+### Profile and polish
+
+- **User profiles** (name, avatar) keep multi-tenant teams recognizable in collaboration surfaces.
+- The experience is **responsive** so checking a metric or accepting an invite is not chained to a desktop-only workflow.
 
 ---
 
-## NLQ (Natural Language Query) — How It Works
+## How LeadBotX Is Different
 
-LeadBotX translates plain English questions into executable queries using a two-step process:
+| Typical approach | What LeadBotX emphasizes |
+|------------------|---------------------------|
+| **Everyone gets SQL or a shared login** | Governed connections with **per-person, per-role** visibility enforced on the server. |
+| **BI suites built around dashboards and report builders** | A **question-first** path: natural language and browsing on **your** tables, without forcing every insight into a pre-built chart first. |
+| **“Chat with your CSV” tools with loose prompts** | **Structured connections**, schema-aware behavior, and **read-only validation** plus RBAC so answers map to policy, not only to model fluency. |
+| **Static exports and one-off spreadsheets** | **Live connections** to SQL where appropriate, and **file uploads** where not — same query and exploration patterns across both. |
+| **Opaque AI demos** | Product positioning around **metadata-driven assistance**, **validated execution**, and **rate-aware** use of high-cost paths — aligned with serious internal and commercial use. |
 
-### Step 1: Schema Context (sent to OpenAI)
-Only metadata is sent — never raw data:
-```
-Table: customers (~5000 rows)
-  name (string)
-  email (string)
-  revenue (number)
-  created_at (date)
-  Sample: {"name":"John","email":"john@example.com","revenue":1500}
-```
-
-### Step 2: AI Response (received from OpenAI)
-
-OpenAI always returns a SQL query — for **all** data sources:
-```json
-{ "status": "ok", "sql": "SELECT name, revenue FROM customers ORDER BY revenue DESC LIMIT 10" }
-```
-This SQL is validated (SELECT-only, no forbidden patterns, table/column RBAC check, LIMIT cap at 500), then executed on the appropriate database:
-- **PostgreSQL / MySQL** — the user's own external database
-- **CSV / Excel** — the platform's managed PostgreSQL instance (Neon), where uploaded file data is stored in isolated schemas
-
-### Security
-- OpenAI never receives actual database rows
-- All generated SQL is validated before execution
-- Table and column access is enforced per user role
-- Rate limited to 20 queries per user per hour
+LeadBotX is aimed at teams that want **self-serve speed** without trading away **who can see what** — especially when more than one team, vendor, or region touches the same underlying data.
 
 ---
 
-## Features at a Glance
+## Who It Is For
 
-| Feature | Description |
-|---------|-------------|
-| **Multi-source connections** | PostgreSQL, MySQL, CSV, Excel — all in one platform |
-| **Natural language querying** | Ask questions in English, get table results |
-| **Voice input** | Browser-side speech-to-text via Web Speech API |
-| **SQL safety** | SELECT-only, pattern blocking, RBAC enforcement |
-| **Role-based access (RBAC)** | Table-level and column-level restrictions per role |
-| **Team collaboration** | Invite members by email, assign roles |
-| **Real-time notifications** | WebSocket push for invites and team activity |
-| **Data preview** | Browse tables with pagination and infinite scroll |
-| **CSV export** | Export NLQ results as CSV files |
-| **Query history** | Save up to 3 queries, track 3 recent per connection |
-| **Schema refresh** | Re-introspect SQL databases on demand |
-| **Connection health** | Auto-detect failed SQL connections, mark as unavailable, allow credential editing |
-| **Connection management** | Rename, enable/disable, delete connections with full cascade cleanup |
-| **Profile management** | Name, email display, avatar upload via Cloudinary |
-| **Swagger API docs** | Full interactive API documentation |
-| **Responsive UI** | Mobile-friendly layout with Tailwind CSS |
+- **Operations and analytics** teams that already store truth in PostgreSQL or MySQL and want safer self-serve questioning.
+- **Leaders** who need **policy-aligned** data access without issuing raw credentials broadly.
+- **Growing organizations** where **invites, roles, and notifications** matter as much as the query box itself.
 
 ---
 
-## Repository Structure
+## This organization on GitHub
 
-```
-LeadBotX/
-├── .github/
-│   └── profile/
-│       └── README.md          ← You are here
-│
-├── backend/                   # NestJS API server
-│   ├── src/                   # Source code (modules, services, controllers)
-│   ├── .env.example           # Environment variable template
-│   ├── package.json
-│   └── README.md              # Backend-specific documentation
-│
-└── website/                   # React SPA frontend
-    ├── src/                   # Source code (components, stores, lib)
-    ├── .env.example           # Environment variable template
-    ├── package.json
-    └── README.md              # Frontend-specific documentation
-```
+Product engineering for LeadBotX is carried out in **private** repositories. This public profile exists to **describe the product** and point visitors to the **live application** — not to document infrastructure, API contracts, or configuration. Technical integration and deployment details remain with the core team and licensed deployments.
+
+For **terms of use**, **privacy**, and the **authoritative** description of the live service, rely on the pages and policies published on **[leadbotx.me](https://leadbotx.me/)**.
 
 ---
 
-## Quick Start
-
-### Prerequisites
-- Node.js 18+
-- MongoDB Atlas cluster
-- PostgreSQL database (Neon recommended) for CSV/Excel row storage
-- Firebase project (Authentication enabled)
-- OpenAI API key
-- Cloudinary account (for avatars)
-
-### Backend
-```bash
-cd backend
-cp .env.example .env           # Fill in real credentials
-npm install
-npm run dev                    # http://localhost:3000
-```
-
-### Frontend
-```bash
-cd website
-cp .env.example .env           # Fill in Firebase config
-npm install
-npm run dev                    # http://localhost:5173
-```
-
----
-
-*Last updated: May 2026*
+*LeadBotX · Last updated: May 2026*
